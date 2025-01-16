@@ -1,4 +1,4 @@
-import { Bot, CommandContext, Context, GrammyError, HearsContext, HttpError, InlineKeyboard, Keyboard, session } from "grammy";
+import { Bot, CommandContext, Context, GrammyError, HearsContext, HttpError, InlineKeyboard, InputFile, Keyboard, session } from "grammy";
 import { DataSource } from "typeorm";
 import { Downloader } from 'nodejs-file-downloader'
 import {
@@ -16,6 +16,7 @@ import { FileFlavor, hydrateFiles } from "@grammyjs/files";
 import { Role, Users } from "./entities/users.entity";
 import { sign } from 'jsonwebtoken'
 import { Config } from "./entities/config.entity";
+import { ShopCartEntity } from "./entities/shopcart.entity";
 config()
 
 type MyContext = FileFlavor<Context> & ConversationFlavor;
@@ -56,7 +57,7 @@ async function deleteService(conversation: MyConversation, ctx: MyContext) {
     ctx.deleteMessages([mes4.message_id]);
     const data2 = await fetch(process.env.BACKEND_URI! + `furniture/services?serviceName=${SelectedService.callbackQuery.data}`);
     const json2Data: any[] = await data2.json();
-    
+
     const mes2 = await ctx.reply(
         `Вы точно хотите удалить продукт?
             Название товара: ${json2Data[0].Name}
@@ -68,13 +69,13 @@ async function deleteService(conversation: MyConversation, ctx: MyContext) {
     });
     const gettedData = await conversation.waitFor("callback_query:data");
 
-    if (gettedData.callbackQuery.data == "yes"){
+    if (gettedData.callbackQuery.data == "yes") {
         await AppDataSource.getRepository(Services).delete({
             Name: SelectedService.callbackQuery.data
         });
         await ctx.reply("Успешно удалено")
     }
-    ctx.deleteMessages([mes2.message_id, mes4.message_id])  
+    ctx.deleteMessages([mes2.message_id, mes4.message_id])
 }
 async function deleteCategory(conversation: MyConversation, ctx: MyContext) {
     await ctx.deleteMessage()
@@ -209,7 +210,7 @@ const AppDataSource = new DataSource({
     username: process.env.DBUSERNAME,
     password: process.env.DBPASS,
     database: process.env.DBNAME,
-    entities: [CalculateEntity, FurnitureService, Services, Users,Config],
+    entities: [CalculateEntity, FurnitureService, Services, Users, Config, ShopCartEntity],
 })
 
 // Handle the /start command.
@@ -224,6 +225,83 @@ bot.command("start", async (ctx) => {
     }
     await ctx.reply("Приветствую пользователя")
 });
+const temp = {
+    id: "123",
+    products: ["12", "21"]
+}
+const loadLabel = (data: string[]) => {
+
+    const labelDataPairs = [
+        ["‹", `prev_${data[1]}_${Number(data[2]) == 0 ? 0 : Number(data[2]) - 1}`],
+        ["Перейти в профиль", "profile"],
+        ["›", `next_${data[1]}_${Number(data[2]) + 1}`],
+    ];
+    return labelDataPairs
+}
+bot.command("test", async ctx => {
+    const labelDataPairs = [
+        ["‹", `prev_${temp.id}_${0}`],
+        ["Перейти в профиль", "profile"],
+        ["›", `next_${temp.id}_${1}`],
+    ];
+    const buttonRow = labelDataPairs
+        .map(([label, data]) => InlineKeyboard.text(label, data));
+    const keyboard = InlineKeyboard.from([buttonRow]);
+    await ctx.reply("ddd", {
+        reply_markup: keyboard
+    })
+})
+const loadNewKeyBoardWithService = async (data: string[]) => {
+    var shopCartId = Number(data[1]);
+    var nextProduct = Number(data[2]);
+    var shopCart = await AppDataSource.getRepository(ShopCartEntity).findOneBy({
+        cartID: shopCartId
+    });
+    if (shopCart) {
+        var products = shopCart.products.split(",")
+        var service = await AppDataSource.getRepository(Services).findOneBy({
+            serviceID: products[nextProduct]
+        });
+        return {
+            keyboard: products.length - 1 == nextProduct ? [
+                ["‹", `prev_${shopCartId}_${nextProduct - 1}`],
+            ] : nextProduct == 0 ? [
+                ["›", `next_${shopCartId}_${nextProduct + 1}`],
+            ] : [
+                ["‹", `prev_${shopCartId}_${nextProduct - 1}`],
+                ["›", `next_${shopCartId}_${nextProduct + 1}`],
+            ],
+            viewed: nextProduct,
+            count: products.length-1,
+            service: service,
+            tgName: `https://t.me/${shopCart.telegramUserName}`
+        }
+    }
+
+
+}
+bot.on("callback_query:data", async ctx => {
+    await ctx.answerCallbackQuery();
+    ctx.from.username
+    var data: string[] = ctx.callbackQuery.data.split('_');
+    var callbackData = await loadNewKeyBoardWithService(data);
+    if (callbackData?.service) {
+        const buttonRow = callbackData.keyboard
+            .map(([label, data]) => InlineKeyboard.text(label, data));
+        const keyboard = InlineKeyboard.from([buttonRow]).row().url("Посмотреть профиль",callbackData.tgName)
+        await ctx.editMessageMedia({
+            media: new InputFile({ url: `https://1640350c0d13.vps.myjino.ru${callbackData.service.Image}` }),
+            type: "photo",
+            caption: `Информация о товаре:\nНазвание: ${callbackData.service.Name}\nЦена: ${callbackData.service.Price} руб\n\nТекущая страница ${callbackData.viewed} из ${callbackData.count}`,
+            parse_mode: "HTML",
+
+        }, {
+            reply_markup: keyboard,
+            
+        })
+    }
+})
+
 bot.hears("Добавить категорию", async ctx => {
     if (await CheckManager(ctx)) await ctx.conversation.enter("addcategory")
 })
@@ -245,10 +323,10 @@ bot.on("message", async ctx => {
     if (ctx.message.text == code) {
         await AppDataSource.getRepository(Config).update({
             tableId: "1"
-        },{
+        }, {
             generatedID: `key_${crypto.randomUUID()}`
         })
-        if(await AppDataSource.getRepository(Users).findOne({where: {userTelegramName: ctx.from.username}})){
+        if (await AppDataSource.getRepository(Users).findOne({ where: { userTelegramName: ctx.from.username } })) {
             return
         }
         await AppDataSource.getRepository(Users).save([

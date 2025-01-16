@@ -11,6 +11,7 @@ const files_1 = require("@grammyjs/files");
 const users_entity_1 = require("./entities/users.entity");
 const jsonwebtoken_1 = require("jsonwebtoken");
 const config_entity_1 = require("./entities/config.entity");
+const shopcart_entity_1 = require("./entities/shopcart.entity");
 (0, dotenv_1.config)();
 const bot = new grammy_1.Bot(process.env.BOT_TOKEN);
 bot.api.config.use((0, files_1.hydrateFiles)(bot.token));
@@ -184,7 +185,7 @@ const AppDataSource = new typeorm_1.DataSource({
     username: process.env.DBUSERNAME,
     password: process.env.DBPASS,
     database: process.env.DBNAME,
-    entities: [calculate_entity_1.CalculateEntity, furniture_entity_1.FurnitureService, services_entity_1.Services, users_entity_1.Users, config_entity_1.Config],
+    entities: [calculate_entity_1.CalculateEntity, furniture_entity_1.FurnitureService, services_entity_1.Services, users_entity_1.Users, config_entity_1.Config, shopcart_entity_1.ShopCartEntity],
 });
 // Handle the /start command.
 bot.command("start", async (ctx) => {
@@ -198,6 +199,77 @@ bot.command("start", async (ctx) => {
         return;
     }
     await ctx.reply("Приветствую пользователя");
+});
+const temp = {
+    id: "123",
+    products: ["12", "21"]
+};
+const loadLabel = (data) => {
+    const labelDataPairs = [
+        ["‹", `prev_${data[1]}_${Number(data[2]) == 0 ? 0 : Number(data[2]) - 1}`],
+        ["Перейти в профиль", "profile"],
+        ["›", `next_${data[1]}_${Number(data[2]) + 1}`],
+    ];
+    return labelDataPairs;
+};
+bot.command("test", async (ctx) => {
+    const labelDataPairs = [
+        ["‹", `prev_${temp.id}_${0}`],
+        ["Перейти в профиль", "profile"],
+        ["›", `next_${temp.id}_${1}`],
+    ];
+    const buttonRow = labelDataPairs
+        .map(([label, data]) => grammy_1.InlineKeyboard.text(label, data));
+    const keyboard = grammy_1.InlineKeyboard.from([buttonRow]);
+    await ctx.reply("ddd", {
+        reply_markup: keyboard
+    });
+});
+const loadNewKeyBoardWithService = async (data) => {
+    var shopCartId = Number(data[1]);
+    var nextProduct = Number(data[2]);
+    var shopCart = await AppDataSource.getRepository(shopcart_entity_1.ShopCartEntity).findOneBy({
+        cartID: shopCartId
+    });
+    if (shopCart) {
+        var products = shopCart.products.split(",");
+        var service = await AppDataSource.getRepository(services_entity_1.Services).findOneBy({
+            serviceID: products[nextProduct]
+        });
+        return {
+            keyboard: products.length - 1 == nextProduct ? [
+                ["‹", `prev_${shopCartId}_${nextProduct - 1}`],
+            ] : nextProduct == 0 ? [
+                ["›", `next_${shopCartId}_${nextProduct + 1}`],
+            ] : [
+                ["‹", `prev_${shopCartId}_${nextProduct - 1}`],
+                ["›", `next_${shopCartId}_${nextProduct + 1}`],
+            ],
+            viewed: nextProduct,
+            count: products.length - 1,
+            service: service,
+            tgName: `https://t.me/${shopCart.telegramUserName}`
+        };
+    }
+};
+bot.on("callback_query:data", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    ctx.from.username;
+    var data = ctx.callbackQuery.data.split('_');
+    var callbackData = await loadNewKeyBoardWithService(data);
+    if (callbackData === null || callbackData === void 0 ? void 0 : callbackData.service) {
+        const buttonRow = callbackData.keyboard
+            .map(([label, data]) => grammy_1.InlineKeyboard.text(label, data));
+        const keyboard = grammy_1.InlineKeyboard.from([buttonRow]).row().url("Посмотреть профиль", callbackData.tgName);
+        await ctx.editMessageMedia({
+            media: new grammy_1.InputFile({ url: `https://1640350c0d13.vps.myjino.ru${callbackData.service.Image}` }),
+            type: "photo",
+            caption: `Информация о товаре:\nНазвание: ${callbackData.service.Name}\nЦена: ${callbackData.service.Price} руб\n\nТекущая страница ${callbackData.viewed} из ${callbackData.count}`,
+            parse_mode: "HTML",
+        }, {
+            reply_markup: keyboard,
+        });
+    }
 });
 bot.hears("Добавить категорию", async (ctx) => {
     if (await CheckManager(ctx))
