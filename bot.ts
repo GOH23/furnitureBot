@@ -318,6 +318,7 @@ bot.hears("Добавить товар по категории", async ctx => {
 bot.hears("Добавить нового мастера", async ctx => {
     if (await CheckManager(ctx)) await ctx.conversation.enter("addmaster")
 })
+
 bot.on("message", async ctx => {
     var code = (await AppDataSource.getRepository(Config).find())[0].generatedID;
     if (ctx.message.text == code) {
