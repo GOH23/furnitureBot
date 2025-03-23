@@ -28,13 +28,13 @@ async function addCategory(conversation, ctx) {
         reply_markup: new grammy_1.InlineKeyboard().text("Да", "yes").text("Нет", "no")
     });
     const data = await conversation.waitFor("callback_query:data");
-    ctx.deleteMessages([mes1.message_id, mes2.message_id]);
     if (data.callbackQuery.data == "yes")
         await AppDataSource.getRepository(furniture_entity_1.FurnitureService).save([
             {
                 serviceName: text
             }
         ]);
+    ctx.deleteMessages([mes1.message_id, mes2.message_id]);
 }
 async function deleteService(conversation, ctx) {
     const data = await fetch(process.env.BACKEND_URI + "furniture/services");
@@ -79,6 +79,7 @@ async function deleteCategory(conversation, ctx) {
         await AppDataSource.getRepository(furniture_entity_1.FurnitureService).delete({
             serviceName: SelectedCategory.callbackQuery.data
         });
+    await ctx.deleteMessages([mes4.message_id, mes2.message_id]);
 }
 async function adduser(conversation, ctx) {
     var _a;

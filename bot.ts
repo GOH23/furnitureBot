@@ -37,13 +37,13 @@ async function addCategory(conversation: MyConversation, ctx: MyContext) {
         reply_markup: new InlineKeyboard().text("Да", "yes").text("Нет", "no")
     });
     const data = await conversation.waitFor("callback_query:data");
-    ctx.deleteMessages([mes1.message_id, mes2.message_id])
+    
     if (data.callbackQuery.data == "yes") await AppDataSource.getRepository(FurnitureService).save([
         {
             serviceName: text
         }
     ]);
-
+    ctx.deleteMessages([mes1.message_id, mes2.message_id])
 }
 async function deleteService(conversation: MyConversation, ctx: MyContext) {
     const data = await fetch(process.env.BACKEND_URI! + "furniture/services");
@@ -96,7 +96,7 @@ async function deleteCategory(conversation: MyConversation, ctx: MyContext) {
     if (data.callbackQuery.data == "yes") await AppDataSource.getRepository(FurnitureService).delete({
         serviceName: SelectedCategory.callbackQuery.data
     });
-
+    await ctx.deleteMessages([mes4.message_id,mes2.message_id]);
 }
 async function adduser(conversation: MyConversation, ctx: MyContext) {
     const mes2 = await ctx.reply(`Добавить мастера с фото или без?`, {
