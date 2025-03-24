@@ -81,8 +81,20 @@ async function deleteCategory(conversation, ctx) {
         });
     await ctx.deleteMessages([mes4.message_id, mes2.message_id]);
 }
+async function downloadFile(ctx, fileId) {
+    try {
+        const fileInfo = await ctx.api.getFile(fileId);
+        const fileUrl = `https://api.telegram.org/file/bot${bot.token}/${fileInfo.file_path}`;
+        console.log(`Получен URL файла: ${fileUrl}`);
+        return fileUrl;
+    }
+    catch (error) {
+        console.error("Ошибка при получении файла:", error);
+        throw error;
+    }
+}
 async function adduser(conversation, ctx) {
-    var _a;
+    var _a, _b, _c;
     const mes2 = await ctx.reply(`Добавить мастера с фото или без?`, {
         reply_markup: new grammy_1.InlineKeyboard().text("Да", "yes").text("Нет", "no")
     });
@@ -110,26 +122,41 @@ async function adduser(conversation, ctx) {
         const mes1 = await ctx.reply("Введите ФИО мастера");
         const name = await conversation.form.text();
         const mes3 = await ctx.reply("Отправьте фотографию мастера");
-        const image = await conversation.waitFor("message:file");
-        var file = await image.getFile();
-        var fileUrl = `${file.getUrl()}`;
-        const PostData = await fetch(process.env.BACKEND_URI + "telegram/add_master", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${authToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                Name: name,
-                userPhotoUrl: fileUrl
-            })
-        });
-        console.log(await PostData.json());
-        await ctx.deleteMessages([mes1.message_id]);
+        const imageMsg = await conversation.waitFor("message:file");
+        let fileUrl;
+        try {
+            if (((_b = imageMsg.message) === null || _b === void 0 ? void 0 : _b.photo) && imageMsg.message.photo.length > 0) {
+                fileUrl = await downloadFile(ctx, imageMsg.message.photo[imageMsg.message.photo.length - 1].file_id);
+            }
+            else if ((_c = imageMsg.message) === null || _c === void 0 ? void 0 : _c.document) {
+                fileUrl = await downloadFile(ctx, imageMsg.message.document.file_id);
+            }
+            else {
+                throw new Error("Фото не найдено в сообщении");
+            }
+            const PostData = await fetch(process.env.BACKEND_URI + "telegram/add_master", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${authToken}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    Name: name,
+                    userPhotoUrl: fileUrl
+                })
+            });
+            console.log(await PostData.json());
+        }
+        catch (error) {
+            console.error("Ошибка при обработке фото мастера:", error);
+            await ctx.reply(`Произошла ошибка при обработке фото: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
+        }
+        await ctx.deleteMessages([mes1.message_id, mes3.message_id]);
     }
+    await ctx.deleteMessages([mes2.message_id]);
 }
 async function addService(conversation, ctx) {
-    var _a;
+    var _a, _b, _c;
     const furnitureRepository = AppDataSource.getRepository(furniture_entity_1.FurnitureService);
     const furnitures = await furnitureRepository.find();
     const mes1 = await ctx.reply("Введите название товара, которое хотите добавить");
@@ -137,7 +164,7 @@ async function addService(conversation, ctx) {
     const mes2 = await ctx.reply("Введите цену товара");
     const price = await conversation.form.number();
     const mes3 = await ctx.reply("Отправьте фотографию товара");
-    const image = await conversation.waitFor("message:file");
+    const imageMsg = await conversation.waitFor("message:file");
     var authToken = (0, jsonwebtoken_1.sign)({ userId: (_a = ctx.from) === null || _a === void 0 ? void 0 : _a.id }, process.env.BOT_TOKEN, {
         expiresIn: "10m"
     });
@@ -145,25 +172,39 @@ async function addService(conversation, ctx) {
         reply_markup: grammy_1.InlineKeyboard.from(furnitures.map((el) => [grammy_1.InlineKeyboard.text(el.serviceName)]))
     });
     const data = await conversation.waitFor("callback_query:data");
-    var file = await image.getFile();
-    var fileUrl = `${file.getUrl()}`;
-    const PostData = await fetch(process.env.BACKEND_URI + "furniture/create-service", {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            Name: name,
-            Price: price,
-            serviceName: data.callbackQuery.data,
-            ImageUrl: fileUrl
-        })
-    });
-    const result = await PostData.json();
-    await ctx.reply("Успешно отправлен запрос на добавление. Тело ответа на запрос: " + "```json " + `${JSON.stringify(result)}` + "```", {
-        parse_mode: "Markdown"
-    });
+    let fileUrl;
+    try {
+        if (((_b = imageMsg.message) === null || _b === void 0 ? void 0 : _b.photo) && imageMsg.message.photo.length > 0) {
+            fileUrl = await downloadFile(ctx, imageMsg.message.photo[imageMsg.message.photo.length - 1].file_id);
+        }
+        else if ((_c = imageMsg.message) === null || _c === void 0 ? void 0 : _c.document) {
+            fileUrl = await downloadFile(ctx, imageMsg.message.document.file_id);
+        }
+        else {
+            throw new Error("Файл не найден в сообщении");
+        }
+        const PostData = await fetch(process.env.BACKEND_URI + "furniture/create-service", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${authToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                Name: name,
+                Price: price,
+                serviceName: data.callbackQuery.data,
+                ImageUrl: fileUrl
+            })
+        });
+        const result = await PostData.json();
+        await ctx.reply("Успешно отправлен запрос на добавление. Тело ответа на запрос: " + "```json " + `${JSON.stringify(result)}` + "```", {
+            parse_mode: "Markdown"
+        });
+    }
+    catch (error) {
+        console.error("Ошибка при обработке файла:", error);
+        await ctx.reply(`Произошла ошибка при обработке файла: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
+    }
     await ctx.deleteMessages([mes1.message_id, mes2.message_id, mes3.message_id, mes4.message_id]);
 }
 bot.use((0, grammy_1.session)({ initial: () => ({}) }));
