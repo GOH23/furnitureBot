@@ -184,9 +184,6 @@ async function addService(conversation: MyConversation, ctx: MyContext) {
     const price = await conversation.form.number();
     const mes3 = await ctx.reply("Введите ссылку на изображение товара, которое хотите добавить");
     const imageUrl = await conversation.form.text();
-    var authToken = sign({ userId: ctx.from?.id }, process.env.BOT_TOKEN!, {
-        expiresIn: "10m"
-    })
     const mes4 = await ctx.reply("Выберете категорию, в которую вы хотите добавить товар", {
         reply_markup: InlineKeyboard.from(
             furnitures.map((el) => [InlineKeyboard.text(el.serviceName)])
@@ -194,26 +191,18 @@ async function addService(conversation: MyConversation, ctx: MyContext) {
     });
 
     const data = await conversation.waitFor("callback_query:data");
-
-    const PostData = await fetch(process.env.BACKEND_URI + "furniture/create-service", {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
+    var service = await AppDataSource.getRepository(FurnitureService).findOneBy({serviceName: data.callbackQuery.data})
+    if(service){
+        await AppDataSource.getRepository(Services).save({
             Name: name,
+            Image: imageUrl,
             Price: price,
-            serviceName: data.callbackQuery.data,
-            ImageUrl: imageUrl
+            Service: service
         })
-    })
-    const result = await PostData.json();
-    await ctx.reply("Успешно отправлен запрос на добавление. Тело ответа на запрос: " + "```json " + `${JSON.stringify(result)}` + "```", {
-        parse_mode: "Markdown"
-    })
-
-
+        await ctx.reply("Успешно отправлен запрос на добавление", {
+            parse_mode: "Markdown"
+        })
+    }
     await ctx.deleteMessages([mes1.message_id, mes2.message_id, mes3.message_id, mes4.message_id])
 }
 bot.use(session({ initial: () => ({}) }));
