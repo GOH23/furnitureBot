@@ -140,26 +140,12 @@ async function adduser(conversation: MyConversation, ctx: MyContext) {
         const name = await conversation.form.text();
         const mes3 = await ctx.reply("Отправьте ссылку на фото мастера");
         const imageMsg = await conversation.form.text();
-        try {
-           
-
-            const PostData = await fetch(process.env.BACKEND_URI + "telegram/add_master", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${authToken}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    Name: name,
-                    userPhotoUrl: imageMsg
-                })
-            });
-            console.log(await PostData.json());
-        } catch (error) {
-            console.error("Ошибка при обработке фото мастера:", error);
-            await ctx.reply(`Произошла ошибка при обработке фото: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
-        }
-
+        const userRepository = AppDataSource.getRepository(Users);
+        await userRepository.save({
+            userTelegramName: name,
+            userRole: "Master",
+            userPhoto: imageMsg
+        })
         await ctx.deleteMessages([mes1.message_id, mes3.message_id]);
     }
     await ctx.deleteMessages([mes2.message_id]);
