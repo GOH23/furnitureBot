@@ -138,18 +138,10 @@ async function adduser(conversation: MyConversation, ctx: MyContext) {
     } else {
         const mes1 = await ctx.reply("Введите ФИО мастера");
         const name = await conversation.form.text();
-        const mes3 = await ctx.reply("Отправьте фотографию мастера");
-        const imageMsg = await conversation.waitFor("message:file");
-
-        let fileUrl;
+        const mes3 = await ctx.reply("Отправьте ссылку на фото мастера");
+        const imageMsg = await conversation.form.text();
         try {
-            if (imageMsg.message?.photo && imageMsg.message.photo.length > 0) {
-                fileUrl = await downloadFile(ctx, imageMsg.message.photo[imageMsg.message.photo.length - 1].file_id);
-            } else if (imageMsg.message?.document) {
-                fileUrl = await downloadFile(ctx, imageMsg.message.document.file_id);
-            } else {
-                throw new Error("Фото не найдено в сообщении");
-            }
+           
 
             const PostData = await fetch(process.env.BACKEND_URI + "telegram/add_master", {
                 method: "POST",
@@ -159,7 +151,7 @@ async function adduser(conversation: MyConversation, ctx: MyContext) {
                 },
                 body: JSON.stringify({
                     Name: name,
-                    userPhotoUrl: fileUrl
+                    userPhotoUrl: imageMsg
                 })
             });
             console.log(await PostData.json());
@@ -184,6 +176,9 @@ async function addService(conversation: MyConversation, ctx: MyContext) {
     const price = await conversation.form.number();
     const mes3 = await ctx.reply("Введите ссылку на изображение товара, которое хотите добавить");
     const imageUrl = await conversation.form.text();
+    var authToken = sign({ userId: ctx.from?.id }, process.env.BOT_TOKEN!, {
+        expiresIn: "10m"
+    })
     const mes4 = await ctx.reply("Выберете категорию, в которую вы хотите добавить товар", {
         reply_markup: InlineKeyboard.from(
             furnitures.map((el) => [InlineKeyboard.text(el.serviceName)])
@@ -191,18 +186,26 @@ async function addService(conversation: MyConversation, ctx: MyContext) {
     });
 
     const data = await conversation.waitFor("callback_query:data");
-    var service = await AppDataSource.getRepository(FurnitureService).findOneBy({serviceName: data.callbackQuery.data})
-    if(service){
-        await AppDataSource.getRepository(Services).save({
+
+    const PostData = await fetch(process.env.BACKEND_URI + "furniture/create-service", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${authToken}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
             Name: name,
-            Image: imageUrl,
             Price: price,
-            Service: service
+            serviceName: data.callbackQuery.data,
+            ImageUrl: imageUrl
         })
-        await ctx.reply("Успешно отправлен запрос на добавление", {
-            parse_mode: "Markdown"
-        })
-    }
+    })
+    const result = await PostData.json();
+    await ctx.reply("Успешно отправлен запрос на добавление. Тело ответа на запрос: " + "```json " + `${JSON.stringify(result)}` + "```", {
+        parse_mode: "Markdown"
+    })
+
+
     await ctx.deleteMessages([mes1.message_id, mes2.message_id, mes3.message_id, mes4.message_id])
 }
 bot.use(session({ initial: () => ({}) }));
