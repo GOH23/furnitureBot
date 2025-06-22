@@ -94,7 +94,7 @@ async function downloadFile(ctx, fileId) {
     }
 }
 async function adduser(conversation, ctx) {
-    var _a, _b, _c;
+    var _a;
     const mes2 = await ctx.reply(`Добавить мастера с фото или без?`, {
         reply_markup: new grammy_1.InlineKeyboard().text("Да", "yes").text("Нет", "no")
     });
@@ -121,36 +121,14 @@ async function adduser(conversation, ctx) {
     else {
         const mes1 = await ctx.reply("Введите ФИО мастера");
         const name = await conversation.form.text();
-        const mes3 = await ctx.reply("Отправьте фотографию мастера");
-        const imageMsg = await conversation.waitFor("message:file");
-        let fileUrl;
-        try {
-            if (((_b = imageMsg.message) === null || _b === void 0 ? void 0 : _b.photo) && imageMsg.message.photo.length > 0) {
-                fileUrl = await downloadFile(ctx, imageMsg.message.photo[imageMsg.message.photo.length - 1].file_id);
-            }
-            else if ((_c = imageMsg.message) === null || _c === void 0 ? void 0 : _c.document) {
-                fileUrl = await downloadFile(ctx, imageMsg.message.document.file_id);
-            }
-            else {
-                throw new Error("Фото не найдено в сообщении");
-            }
-            const PostData = await fetch(process.env.BACKEND_URI + "telegram/add_master", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${authToken}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    Name: name,
-                    userPhotoUrl: fileUrl
-                })
-            });
-            console.log(await PostData.json());
-        }
-        catch (error) {
-            console.error("Ошибка при обработке фото мастера:", error);
-            await ctx.reply(`Произошла ошибка при обработке фото: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
-        }
+        const mes3 = await ctx.reply("Отправьте ссылку на фото мастера");
+        const imageMsg = await conversation.form.text();
+        const userRepository = AppDataSource.getRepository(users_entity_1.Users);
+        await userRepository.save({
+            userTelegramName: name,
+            userRole: "Master",
+            userPhoto: imageMsg
+        });
         await ctx.deleteMessages([mes1.message_id, mes3.message_id]);
     }
     await ctx.deleteMessages([mes2.message_id]);
@@ -158,6 +136,7 @@ async function adduser(conversation, ctx) {
 async function addService(conversation, ctx) {
     var _a;
     const furnitureRepository = AppDataSource.getRepository(furniture_entity_1.FurnitureService);
+    const serviceRepository = AppDataSource.getRepository(services_entity_1.Services);
     const furnitures = await furnitureRepository.find();
     const mes1 = await ctx.reply("Введите название товара, которое хотите добавить");
     const name = await conversation.form.text();
@@ -172,21 +151,27 @@ async function addService(conversation, ctx) {
         reply_markup: grammy_1.InlineKeyboard.from(furnitures.map((el) => [grammy_1.InlineKeyboard.text(el.serviceName)]))
     });
     const data = await conversation.waitFor("callback_query:data");
-    const PostData = await fetch(process.env.BACKEND_URI + "furniture/create-service", {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            Name: name,
-            Price: price,
-            serviceName: data.callbackQuery.data,
-            ImageUrl: imageUrl
-        })
+    // const PostData = await fetch(process.env.BACKEND_URI + "furniture/create-service", {
+    //     method: "POST",
+    //     headers: {
+    //         "Authorization": `Bearer ${authToken}`,
+    //         "Content-Type": "application/json"
+    //     },
+    //     body: JSON.stringify({
+    //         Name: name,
+    //         Price: price,
+    //         serviceName: data.callbackQuery.data,
+    //         ImageUrl: imageUrl
+    //     })
+    // })
+    // const result = await PostData.json();
+    const newServ = await serviceRepository.save({
+        Name: name,
+        Price: price,
+        serviceName: data.callbackQuery.data,
+        ImageUrl: imageUrl
     });
-    const result = await PostData.json();
-    await ctx.reply("Успешно отправлен запрос на добавление. Тело ответа на запрос: " + "```json " + `${JSON.stringify(result)}` + "```", {
+    await ctx.reply("Успешно отправлен запрос на добавление.", {
         parse_mode: "Markdown"
     });
     await ctx.deleteMessages([mes1.message_id, mes2.message_id, mes3.message_id, mes4.message_id]);

@@ -152,7 +152,7 @@ async function adduser(conversation: MyConversation, ctx: MyContext) {
 }
 async function addService(conversation: MyConversation, ctx: MyContext) {
     const furnitureRepository = AppDataSource.getRepository(FurnitureService);
-
+    const serviceRepository = AppDataSource.getRepository(Services);
     const furnitures = await furnitureRepository.find()
     const mes1 = await ctx.reply("Введите название товара, которое хотите добавить");
     const name = await conversation.form.text();
@@ -173,21 +173,27 @@ async function addService(conversation: MyConversation, ctx: MyContext) {
 
     const data = await conversation.waitFor("callback_query:data");
 
-    const PostData = await fetch(process.env.BACKEND_URI + "furniture/create-service", {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            Name: name,
-            Price: price,
-            serviceName: data.callbackQuery.data,
-            ImageUrl: imageUrl
-        })
+    // const PostData = await fetch(process.env.BACKEND_URI + "furniture/create-service", {
+    //     method: "POST",
+    //     headers: {
+    //         "Authorization": `Bearer ${authToken}`,
+    //         "Content-Type": "application/json"
+    //     },
+    //     body: JSON.stringify({
+    //         Name: name,
+    //         Price: price,
+    //         serviceName: data.callbackQuery.data,
+    //         ImageUrl: imageUrl
+    //     })
+    // })
+    // const result = await PostData.json();
+    const newServ = await serviceRepository.save({
+        Name: name,
+        Price: price,
+        serviceName: furnitureRepository.findOneBy({ serviceName: data.callbackQuery.data }),
+        ImageUrl: imageUrl
     })
-    const result = await PostData.json();
-    await ctx.reply("Успешно отправлен запрос на добавление. Тело ответа на запрос: " + "```json " + `${JSON.stringify(result)}` + "```", {
+    await ctx.reply(`Успешно отправлен запрос на добавление. ${newServ.serviceName}`, {
         parse_mode: "Markdown"
     })
 
