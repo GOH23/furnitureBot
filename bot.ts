@@ -187,15 +187,19 @@ async function addService(conversation: MyConversation, ctx: MyContext) {
     //     })
     // })
     // const result = await PostData.json();
-    const newServ = await serviceRepository.save({
-        Name: name,
-        Price: price,
-        serviceName: await furnitureRepository.findOneBy({ serviceName: data.callbackQuery.data }),
-        Image: imageUrl
-    })
-    await ctx.reply(`Успешно отправлен запрос на добавление.`, {
-        parse_mode: "Markdown"
-    })
+    var serv = await furnitureRepository.findOneBy({ serviceName: data.callbackQuery.data });
+    if(serv){
+        const newServ = await serviceRepository.save({
+            Name: name,
+            Price: price,
+            Service: serv,
+            Image: imageUrl
+        })
+        await ctx.reply(`Успешно отправлен запрос на добавление.`, {
+            parse_mode: "Markdown"
+        })
+    }
+
 
 
     await ctx.deleteMessages([mes1.message_id, mes2.message_id, mes3.message_id, mes4.message_id])
