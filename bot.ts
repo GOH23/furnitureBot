@@ -191,7 +191,7 @@ async function addService(conversation: MyConversation, ctx: MyContext) {
         Name: name,
         Price: price,
         serviceName: furnitureRepository.findOneBy({ serviceName: data.callbackQuery.data }),
-        ImageUrl: imageUrl
+        Image: imageUrl
     })
     await ctx.reply(`Успешно отправлен запрос на добавление. ${newServ.serviceName}`, {
         parse_mode: "Markdown"
