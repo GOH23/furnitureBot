@@ -190,7 +190,7 @@ async function addService(conversation: MyConversation, ctx: MyContext) {
     const newServ = await serviceRepository.save({
         Name: name,
         Price: price,
-        serviceName: furnitureRepository.findOneBy({ serviceName: data.callbackQuery.data }),
+        serviceName: await furnitureRepository.findOneBy({ serviceName: data.callbackQuery.data }),
         Image: imageUrl
     })
     await ctx.reply(`Успешно отправлен запрос на добавление.`, {
